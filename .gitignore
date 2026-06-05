@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+
+data/
+logs/
+
+*.csv
+*.pkl
+*.db
+
+.env

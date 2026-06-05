@@ -1,0 +1,110 @@
+from replay.replay_engine_v4 import (
+    run_replay
+)
+
+best_balance = -999999
+
+best_config = None
+
+
+confidence_values = [
+
+    0.75,
+    0.80,
+    0.85
+]
+
+velocity_values = [
+
+    0.25,
+    0.35,
+    0.45
+]
+
+base_hold_values = [
+
+    5,
+    8,
+    12
+]
+
+
+for confidence in confidence_values:
+
+    for velocity_decay in velocity_values:
+
+        for base_hold in base_hold_values:
+
+
+            result = run_replay(
+
+                confidence_threshold=
+                confidence,
+
+                velocity_decay_threshold=
+                velocity_decay,
+
+                base_hold=
+                base_hold,
+
+                dynamic_hold=
+                15,
+
+                loss_cut=
+                -0.8
+            )
+
+
+            balance = result[
+                "balance"
+            ]
+
+
+            print()
+
+            print(
+                "=================="
+            )
+
+            print(
+                f"CONFIDENCE : {confidence}"
+            )
+
+            print(
+                f"VELOCITY   : {velocity_decay}"
+            )
+
+            print(
+                f"HOLD       : {base_hold}"
+            )
+
+            print(
+                f"BALANCE    : {balance}"
+            )
+
+
+            if balance > best_balance:
+
+                best_balance = balance
+
+                best_config = {
+
+                    "confidence":
+                    confidence,
+
+                    "velocity_decay":
+                    velocity_decay,
+
+                    "base_hold":
+                    base_hold,
+
+                    "balance":
+                    balance
+                }
+
+
+print()
+print("=== BEST CONFIG ===")
+print()
+
+print(best_config)
