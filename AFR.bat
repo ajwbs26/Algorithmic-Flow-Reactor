@@ -1,9 +1,16 @@
 @echo off
 
-cd /d "D:\Aji Titip\AFR"
+cd /d C:\Users\Administrator\Documents\AFR
 
-call "C:\Users\Ajwbs\venv_win\Scripts\activate.bat"
+call venv\Scripts\activate
 
-title AFR Trading Lab
+start "AFR LIVE ENGINE" cmd /k python live\paper_engine.py
 
-cmd /k
+timeout /t 3 >nul
+
+echo.
+echo ============================
+echo AFR STARTED
+echo ============================
+echo.
+pause

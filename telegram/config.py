@@ -1,0 +1,33 @@
+BOT_TOKEN = "8433625917:AAGg-VlK9chKb5kiU1dzVTiXTqFf1t0bqTw"
+
+CHAT_ID = "8708602484"
+
+DB_HOST = "127.0.0.1"
+
+DB_NAME = "postgres"
+
+DB_USER = "postgres"
+
+DB_PASSWORD = "00000"
+
+DB_PORT = "5432"
+
+HEARTBEAT_SECONDS = 300
+
+OFFLINE_SECONDS = 180
+
+ENABLE_HEARTBEAT = False
+
+ENABLE_OFFLINE_DETECTOR = True
+
+ENABLE_DAILY_REPORT = True
+
+ENABLE_ERROR_MONITOR = True
+
+ENABLE_TRADE_MONITOR = True
+
+last_live_timestamp = None
+
+engine_alert_sent = False
+
+last_signal_id = 0
