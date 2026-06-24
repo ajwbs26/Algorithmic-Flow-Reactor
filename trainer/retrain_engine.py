@@ -5,8 +5,6 @@ import pandas as pd
 
 from sklearn.model_selection import train_test_split
 
-from sklearn.preprocessing import StandardScaler
-
 from sklearn.ensemble import (
     RandomForestRegressor,
     RandomForestClassifier
@@ -114,18 +112,53 @@ def prepare_data(df):
         .map(GRADE_MAP)
     )
 
+    df["velocity_delta"] = (
+
+        df["exit_velocity"]
+
+        -
+
+        df["entry_velocity"]
+
+    )
+
+    df["pressure_delta"] = (
+
+        df["exit_pressure"]
+
+        -
+
+        df["entry_pressure"]
+
+    )
+
+    df["exhaustion_delta"] = (
+
+        df["exit_exhaustion_score"]
+
+        -
+
+        df["entry_exhaustion_score"]
+
+    )
+
     features = [
 
         "confidence",
-
         "entry_velocity",
         "entry_pressure",
-
         "entry_range_expansion",
         "entry_volatility_shift",
         "entry_exhaustion_score",
-
-        "hold_minutes"
+        "exit_velocity",
+        "exit_pressure",
+        "exit_range_expansion",
+        "exit_volatility_shift",
+        "exit_exhaustion_score",
+        "exit_confidence",
+        "velocity_delta",
+        "pressure_delta",
+        "exhaustion_delta"
 
     ]
 
@@ -141,21 +174,13 @@ def prepare_data(df):
         "entry_grade_num"
     ]
 
-    scaler = StandardScaler()
-
-    X_scaled = scaler.fit_transform(
-        X
-    )
-
     return (
 
-        X_scaled,
+        X,
 
         y_quality,
 
-        y_grade,
-
-        scaler
+        y_grade
 
     )
 
@@ -301,33 +326,371 @@ def train_entry_grade(
 
     )
 
+def get_new_model_version():
+
+    conn = psycopg2.connect(
+        **DB_CONFIG
+    )
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT model_version
+        FROM ai_models
+        ORDER BY id DESC
+        LIMIT 1
+        """
+    )
+
+    last_model = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    if last_model is None:
+
+        return "AFR_V1"
+
+    last_version = int(
+        last_model[0]
+        .replace(
+            "AFR_V",
+            ""
+        )
+    )
+
+    return (
+        f"AFR_V{last_version + 1}"
+    )
+
 # =====================================
-# SAVE MODELS
+# SAVE AI MODELS
 # =====================================
 
-def save_models(
+def save_ai_models(
 
-    scaler,
+    model_version,
+
+    trade_count,
+
+    quality_score,
+
+    grade_score,
 
     quality_model,
 
-    grade_model
+    feature_names
 
 ):
 
-    joblib.dump(
+    conn = psycopg2.connect(
+        **DB_CONFIG
+    )
 
-        scaler,
+    cursor = conn.cursor()
 
-        os.path.join(
+    importance_map = {}
 
-            MODEL_DIR,
+    for feature, importance in zip(
 
-            "scaler.joblib"
+        feature_names,
+
+        quality_model.feature_importances_
+
+    ):
+
+        importance_map[
+            feature
+        ] = round(
+            float(
+                importance
+            ),
+            4
+        )
+
+    cursor.execute(
+        """
+        INSERT INTO ai_models(
+
+            model_version,
+
+            trade_count,
+
+            trade_quality_score,
+
+            entry_grade_score,
+
+            active_model,
+
+            confidence_importance,
+
+            entry_velocity_importance,
+
+            entry_pressure_importance,
+
+            range_expansion_importance,
+
+            volatility_shift_importance,
+
+            exhaustion_importance,
+
+            chaos_regime_importance,
+
+            velocity_delta_importance,
+
+            pressure_delta_importance,
+
+            exhaustion_delta_importance,
+
+            created_at
 
         )
 
+        VALUES(
+
+            %s,%s,%s,%s,
+            %s,
+
+            %s,%s,%s,%s,%s,
+            %s,%s,%s,%s,%s,
+
+            NOW()
+
+        )
+        """,
+        (
+
+            model_version,
+
+            trade_count,
+
+            quality_score,
+
+            grade_score,
+
+            True,
+
+            importance_map.get(
+                "confidence",
+                0
+            ),
+
+            importance_map.get(
+                "entry_velocity",
+                0
+            ),
+
+            importance_map.get(
+                "entry_pressure",
+                0
+            ),
+
+            importance_map.get(
+                "entry_range_expansion",
+                0
+            ),
+
+            importance_map.get(
+                "entry_volatility_shift",
+                0
+            ),
+
+            importance_map.get(
+                "entry_exhaustion_score",
+                0
+            ),
+
+            importance_map.get(
+                "entry_chaos_regime",
+                0
+            ),
+
+            importance_map.get(
+                "velocity_delta",
+                0
+            ),
+
+            importance_map.get(
+                "pressure_delta",
+                0
+            ),
+
+            importance_map.get(
+                "exhaustion_delta",
+                0
+            )
+
+        )
     )
+
+    conn.commit()
+
+    cursor.close()
+
+    conn.close()
+
+# =====================================
+# SAVE AI LEARNING LOG
+# =====================================
+
+def save_ai_learning_log(
+
+    model_version,
+
+    quality_score,
+
+    grade_score
+
+):
+
+    conn = psycopg2.connect(
+        **DB_CONFIG
+    )
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+
+            model_version,
+
+            trade_quality_score,
+
+            entry_grade_score
+
+        FROM ai_models
+
+        WHERE model_version <> %s
+
+        ORDER BY id DESC
+
+        LIMIT 1
+        """,
+        (
+            model_version,
+        )
+    )
+
+    previous = cursor.fetchone()
+
+    if previous is None:
+
+        decision = "INITIAL"
+
+        prev_version = None
+
+        prev_quality = 0
+
+        prev_accuracy = 0
+
+        improvement_pct = 0
+
+    else:
+
+        prev_version = previous[0]
+
+        prev_quality = previous[1]
+
+        prev_accuracy = previous[2]
+
+        improvement_pct = round(
+
+            (
+                quality_score
+                -
+                prev_quality
+            )
+
+            * 100,
+
+            2
+
+        )
+
+        if quality_score > prev_quality:
+
+            decision = "PROMOTED"
+
+        else:
+
+            decision = "REJECTED"
+
+    cursor.execute(
+        """
+        INSERT INTO ai_learning_log(
+
+            model_version,
+
+            previous_version,
+
+            previous_quality,
+
+            current_quality,
+
+            previous_accuracy,
+
+            current_accuracy,
+
+            improvement_pct,
+
+            decision,
+
+            notes,
+
+            created_at
+
+        )
+
+        VALUES(
+
+            %s,%s,%s,%s,
+            %s,%s,%s,
+            %s,%s,
+            NOW()
+
+        )
+        """,
+        (
+
+            model_version,
+
+            prev_version,
+
+            prev_quality,
+
+            quality_score,
+
+            prev_accuracy,
+
+            grade_score,
+
+            improvement_pct,
+
+            decision,
+
+            f"Compared {prev_version} vs {model_version}"
+
+        )
+    )
+
+    conn.commit()
+
+    cursor.close()
+
+    conn.close()
+
+# =====================================
+# SAVE MODELS
+# =====================================
+def save_models(
+
+        quality_model,
+
+        grade_model
+
+):
 
     joblib.dump(
 
@@ -464,8 +827,7 @@ def main():
 
     X,\
     y_quality,\
-    y_grade,\
-    scaler = prepare_data(
+    y_grade = prepare_data(
         df
     )
 
@@ -495,13 +857,71 @@ def main():
 
     )
 
-    save_models(
+    model_version = (
+        get_new_model_version()
+    )
 
-        scaler,
+    feature_names = [
+
+        "confidence",
+
+        "entry_velocity",
+        "entry_pressure",
+
+        "entry_range_expansion",
+        "entry_volatility_shift",
+
+        "entry_exhaustion_score",
+
+        "entry_chaos_regime",
+
+        "exit_velocity",
+        "exit_pressure",
+
+        "exit_range_expansion",
+        "exit_volatility_shift",
+
+        "exit_exhaustion_score",
+
+        "exit_confidence",
+
+        "velocity_delta",
+        "pressure_delta",
+        "exhaustion_delta"
+
+    ]
+
+    save_models(
 
         quality_model,
 
         grade_model
+
+    )
+
+    save_ai_models(
+
+        model_version,
+
+        trade_count,
+
+        quality_score,
+
+        grade_score,
+
+        quality_model,
+
+        feature_names
+
+    )
+
+    save_ai_learning_log(
+
+        model_version,
+
+        quality_score,
+
+        grade_score
 
     )
 
@@ -536,16 +956,28 @@ def main():
         "confidence",
 
         "entry_velocity",
-
         "entry_pressure",
 
         "entry_range_expansion",
-
         "entry_volatility_shift",
 
         "entry_exhaustion_score",
 
-        "hold_minutes"
+        "entry_chaos_regime",
+
+        "exit_velocity",
+        "exit_pressure",
+
+        "exit_range_expansion",
+        "exit_volatility_shift",
+
+        "exit_exhaustion_score",
+
+        "exit_confidence",
+
+        "velocity_delta",
+        "pressure_delta",
+        "exhaustion_delta"
 
     ]
 

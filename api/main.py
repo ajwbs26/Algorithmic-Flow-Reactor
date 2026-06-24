@@ -15,6 +15,14 @@ model = joblib.load(
     "model/afr_model.pkl"
 )
 
+quality_model = joblib.load(
+    "models/trade_quality_model.joblib"
+)
+
+grade_model = joblib.load(
+    "models/entry_grade_model.joblib"
+)
+
 FEATURE_COLUMNS = joblib.load(
     "model/feature_columns.pkl"
 )

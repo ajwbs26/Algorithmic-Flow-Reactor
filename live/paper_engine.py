@@ -668,6 +668,46 @@ while True:
         latest["exhaustion_score"]
     )
 
+    # =====================================
+    # ENERGY LIFECYCLE
+    # =====================================
+
+    if (
+
+        velocity > 0
+
+        and
+
+        pressure_delta > 0
+
+        and
+
+        exhaustion_score < 0.25
+
+    ):
+
+        energy_lifecycle = "EXPANDING"
+
+    elif (
+
+        velocity < 0
+
+        and
+
+        pressure_delta < 0
+
+    ):
+
+        energy_lifecycle = "COLLAPSING"
+
+    elif exhaustion_score > 0.25:
+
+        energy_lifecycle = "EXHAUSTING"
+
+    else:
+
+        energy_lifecycle = "STABLE"
+
     payload = {
 
         "velocity":
@@ -769,6 +809,72 @@ while True:
         result["confidence"]
     )
 
+    # =====================================
+    # ENERGY PENALTY
+    # =====================================
+
+    if energy_lifecycle == "STABLE":
+
+        confidence -= 0.15
+
+    elif energy_lifecycle == "COLLAPSING":
+
+        confidence += 0.05
+
+    elif energy_lifecycle == "EXHAUSTING":
+
+        confidence += 0.03
+
+    elif energy_lifecycle == "EXPANDING":
+
+        confidence += 0.01
+
+    confidence = max(
+        0.0,
+        min(
+            confidence,
+            1.0
+        )
+    )
+
+    print(
+    f"[LIFECYCLE] {energy_lifecycle}"
+    )
+
+    print(
+        f"[AI] prediction={prediction}"
+    )
+
+    print(
+        f"[AI] confidence={confidence:.4f}"
+    )
+
+    # =====================================
+    # SESSION CONFIDENCE MODIFIER
+    # =====================================
+
+    hour = current_candle_time.hour
+
+    if 0 <= hour < 7:
+
+        confidence -= 0.05
+
+    elif 7 <= hour < 13:
+
+        confidence -= 0.03
+
+    else:
+
+        confidence += 0.05
+
+    confidence = max(
+        0.0,
+        min(
+            confidence,
+            1.0
+        )
+    )
+
     spread = float(
         latest["spread"]
     )
@@ -804,6 +910,16 @@ while True:
     print(
         f"[AI] prediction : "
         f"{prediction}"
+    )
+
+    print(
+        f"[AI] confidence : "
+        f"{confidence:.4f}"
+    )
+    
+    print(
+        f"[LIFECYCLE] "
+        f"{energy_lifecycle}"
     )
 
     print(

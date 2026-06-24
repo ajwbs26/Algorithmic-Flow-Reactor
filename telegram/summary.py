@@ -138,6 +138,30 @@ def calculate_trade_quality(
     )
 
  # =====================================
+ # TRADE LIFECYCLE
+ # =====================================
+
+def get_trade_lifecycle(
+    hold_minutes
+):
+
+    if hold_minutes <= 2:
+
+        return "FLASH"
+
+    elif hold_minutes <= 10:
+
+        return "MOMENTUM"
+
+    elif hold_minutes <= 30:
+
+        return "TREND"
+
+    else:
+
+        return "EXTENDED"
+
+ # =====================================
 
  # ENTRY GRADE
 
@@ -324,12 +348,15 @@ def process_trade_summary():
     cursor = conn.cursor()
 
     cursor.execute(
+        
         """
         SELECT *
 
         FROM closed_trades
 
         WHERE processed = false
+        ORDER BY id ASC
+
         """
     )
 
@@ -394,6 +421,66 @@ def process_trade_summary():
             )
 
             continue
+
+
+        velocity_delta = (
+
+            exit_snapshot["velocity"]
+
+            -
+
+            entry_snapshot["velocity"]
+
+        )
+
+        pressure_delta = (
+
+            exit_snapshot["pressure_delta"]
+
+            -
+
+            entry_snapshot["pressure_delta"]
+
+        )
+
+        exhaustion_delta = (
+
+            exit_snapshot["exhaustion_score"]
+
+            -
+
+            entry_snapshot["exhaustion_score"]
+
+        )
+
+        if (
+            velocity_delta > 0
+            and
+            pressure_delta > 0
+            and
+            exhaustion_delta <= 0
+        ):
+
+            lifecycle = "EXPANDING"
+        
+        elif (
+            velocity_delta < 0
+            and
+            pressure_delta < 0
+
+        ):
+
+            lifecycle = "COLLAPSING"
+
+        elif exhaustion_delta > 0.30:
+
+            lifecycle = "EXHAUSTING"
+            
+        else:
+
+            lifecycle = "STABLE"   
+
+        energy_lifecycle = lifecycle
 
         pnl = float(
             row["pnl"]
@@ -485,6 +572,15 @@ def process_trade_summary():
 
         )
 
+        trade_lifecycle = (
+
+            get_trade_lifecycle(
+
+                row["hold_minutes"]
+
+            )
+        )
+        
         cursor.execute(
             """
             INSERT INTO trade_summary(
@@ -536,7 +632,15 @@ def process_trade_summary():
 
                 exit_confidence,
 
-                processed_at
+                processed_at,
+
+                trade_lifecycle,
+
+                velocity_delta,
+                pressure_delta,
+                exhaustion_delta,
+
+                energy_lifecycle
 
             )
 
@@ -562,7 +666,13 @@ def process_trade_summary():
 
                 %s,
 
-                NOW()
+                NOW(),
+
+                %s,
+
+                %s,%s,%s,
+
+                %s
 
             )
             """,
@@ -593,45 +703,17 @@ def process_trade_summary():
 
                 row["exit_reason"],
 
-                entry_snapshot[
-                    "range_expansion"
-                ],
+                entry_snapshot["range_expansion"],
+                entry_snapshot["volatility_shift"],
+                entry_snapshot["exhaustion_score"],
+                entry_snapshot["chaos_regime"],
 
-                entry_snapshot[
-                    "volatility_shift"
-                ],
-
-                entry_snapshot[
-                    "exhaustion_score"
-                ],
-
-                entry_snapshot[
-                    "chaos_regime"
-                ],
-
-                exit_snapshot[
-                    "velocity"
-                ],
-
-                exit_snapshot[
-                    "pressure_delta"
-                ],
-
-                exit_snapshot[
-                    "range_expansion"
-                ],
-
-                exit_snapshot[
-                    "volatility_shift"
-                ],
-
-                exit_snapshot[
-                    "exhaustion_score"
-                ],
-
-                exit_snapshot[
-                    "chaos_regime"
-                ],
+                exit_snapshot["velocity"],
+                exit_snapshot["pressure_delta"],
+                exit_snapshot["range_expansion"],
+                exit_snapshot["volatility_shift"],
+                exit_snapshot["exhaustion_score"],
+                exit_snapshot["chaos_regime"],
 
                 trade_quality,
 
@@ -645,9 +727,17 @@ def process_trade_summary():
 
                 "AFR_V1",
 
-                exit_snapshot[
-                    "confidence"
-                ]
+                exit_snapshot["confidence"],
+
+                trade_lifecycle,
+
+                velocity_delta,
+
+                pressure_delta,
+
+                exhaustion_delta,
+
+                energy_lifecycle
 
             )
         )
